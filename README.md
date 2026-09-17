@@ -104,6 +104,13 @@ calendars. On that path every event reads as free, because the format cannot
 say otherwise — sound only if the export was already filtered, and the run
 logs a warning saying so.
 
+It posts through its **own** Slack workflow, named `Boston AI Week Events`, so
+the posts are attributed separately and the whole thing can be retired after
+the festival without touching the other feed. Set it up exactly like the first
+(same `headline` + `text` variables, same bold on the headline chip) and store
+it as the `SLACK_WEBHOOK_URL_AIWEEK` secret. If that secret is absent the feed
+falls back to the shared `SLACK_WEBHOOK_URL`, so it works either way.
+
 Known rough edges in the source data, all handled:
 
 - 4 events say `Time: TBA`. They are surfaced with a `time TBA` label rather
@@ -246,3 +253,8 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
   renderer automatically.
 - **Scope.** Only events the column lists get posted; this is a reader of that
   column, not a general Boston Calendar crawler.
+- **The AI Week feed expires.** Its events run Aug 24 – Oct 28 2026, bunched
+  into Sep 22 – Oct 2. Once past that it will find nothing and stay silent
+  forever rather than erroring, so delete `aiweek-digest.yml` and the
+  `Boston AI Week Events` Slack workflow in November rather than leaving a
+  cron that can never post.

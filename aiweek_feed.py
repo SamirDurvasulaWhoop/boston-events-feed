@@ -391,7 +391,13 @@ def main() -> int:
         selected = [e for e in selected if not e.is_virtual]
     selected.sort(key=sort_key)
 
-    webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
+    # Its own Slack workflow (so the posts are attributed to "Boston AI Week
+    # Events" and can be retired after the festival without touching the other
+    # feed), falling back to the shared one if that is not configured.
+    webhook = (
+        os.environ.get("SLACK_WEBHOOK_URL_AIWEEK", "").strip()
+        or os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+    )
     workflow_mode = args.workflow_payload or slack.is_workflow_webhook(webhook)
     slack.log(f"payload mode: {'workflow-builder' if workflow_mode else 'block-kit'}")
 

@@ -44,6 +44,8 @@ jobs:
 
       - name: Post digest
         env:
+          # Prefers its own Slack workflow; falls back to the shared webhook.
+          SLACK_WEBHOOK_URL_AIWEEK: ${{ secrets.SLACK_WEBHOOK_URL_AIWEEK }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           # Passed as env, not interpolated into the command line: workflow
           # inputs are attacker-controllable text and `run:` interpolation
