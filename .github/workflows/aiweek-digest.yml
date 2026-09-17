@@ -1,0 +1,59 @@
+name: Daily AI Week digest
+
+on:
+  schedule:
+    # 13:30 UTC = 9:30am Boston during EDT, 8:30am during EST. Half an hour
+    # after the Boston Calendar digest so the two do not land together.
+    # GitHub cron is UTC-only with no DST handling; shift to "30 14 * * *"
+    # after the November clock change to stay at 9:30am.
+    - cron: "30 13 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Run for a specific date (YYYY-MM-DD), blank for today"
+        required: false
+      dry_run:
+        description: "Print the message instead of posting to Slack"
+        type: boolean
+        default: false
+      include_work_hours:
+        description: "Include events during work hours too"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiweek-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Post digest
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # Passed as env, not interpolated into the command line: workflow
+          # inputs are attacker-controllable text and `run:` interpolation
+          # would let them inject shell.
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_ALL_HOURS: ${{ inputs.include_work_hours }}
+        run: |
+          args=()
+          if [ -n "$INPUT_DATE" ]; then args+=(--date "$INPUT_DATE"); fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ "$INPUT_ALL_HOURS" = "true" ]; then args+=(--include-work-hours); fi
+          python aiweek_feed.py "${args[@]}"

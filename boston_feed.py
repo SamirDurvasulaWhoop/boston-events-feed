@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from zoneinfo import ZoneInfo
 
+import slack_digest as slack
+
 SITE = "https://www.thebostoncalendar.com"
 SITEMAP = f"{SITE}/sitemap.xml"
 # The leading count changes monthly (108, 100, 106, 102...) and is optional
@@ -30,8 +32,6 @@ SITEMAP = f"{SITE}/sitemap.xml"
 SLUG_RE = r"[a-z0-9-]*?things-to-do-in-boston-for-10-or-less-{month}-{year}"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) boston-events-feed/1.0"
 EASTERN = ZoneInfo("America/New_York")
-# Slack rejects a message over 4000 chars; leave room for the trim notice.
-WORKFLOW_TEXT_LIMIT = 3900
 
 WEEKDAYS = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
@@ -233,8 +233,12 @@ def to_date(month: int, day: int, list_month: int, list_year: int) -> date | Non
 # Slack message
 # --------------------------------------------------------------------------
 
-def slack_escape(text: str) -> str:
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+slack_escape = slack.slack_escape
+pack_lines = slack.pack_lines
+is_workflow_webhook = slack.is_workflow_webhook
+slack_response_ok = slack.slack_response_ok
+post_to_slack = slack.post_to_slack
+WORKFLOW_TEXT_LIMIT = slack.WORKFLOW_TEXT_LIMIT
 
 
 def absolute(url: str | None) -> str | None:
@@ -313,32 +317,6 @@ def build_message(events: list[Event], today: date, source_url: str, source_titl
     return {"text": f"🎟️ {headline}", "blocks": blocks}
 
 
-def pack_lines(lines: list[str], limit: int) -> list[str]:
-    """Group lines into chunks that each stay under Slack's per-section limit."""
-    chunks: list[str] = []
-    current: list[str] = []
-    size = 0
-    for line in lines:
-        # +1 for the joining newline.
-        if current and size + len(line) + 1 > limit:
-            chunks.append("\n".join(current))
-            current, size = [], 0
-        current.append(line)
-        size += len(line) + 1
-    if current:
-        chunks.append("\n".join(current))
-    return chunks
-
-
-def is_workflow_webhook(webhook: str) -> bool:
-    """Tell a Workflow Builder trigger from a classic incoming webhook.
-
-    Classic incoming webhooks are always hooks.slack.com/services/...
-    Workflow Builder has used several shapes over the years
-    (/triggers/, /workflows/, slack.com/shortcuts/...), so treat anything
-    that isn't /services/ as a workflow trigger.
-    """
-    return bool(webhook) and "/services/" not in webhook
 
 
 def build_workflow_payload(
@@ -384,28 +362,6 @@ def build_workflow_payload(
         log(f"warning: trimmed {dropped} events to fit Slack's message limit")
     return {"headline": headline, "text": body}
 
-
-def post_to_slack(webhook: str, payload: dict) -> None:
-    req = urllib.request.Request(
-        webhook,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "User-Agent": UA},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        body = resp.read().decode(errors="replace").strip()
-        if resp.status != 200 or not slack_response_ok(body):
-            raise SystemExit(f"Slack rejected the post: HTTP {resp.status} {body}")
-
-
-def slack_response_ok(body: str) -> bool:
-    """Classic incoming webhooks reply with the literal string "ok";
-    Workflow Builder triggers reply with JSON containing "ok": true."""
-    if body.strip() == "ok":
-        return True
-    try:
-        return json.loads(body).get("ok") is True
-    except (json.JSONDecodeError, AttributeError):
-        return False
 
 
 def log(message: str) -> None:

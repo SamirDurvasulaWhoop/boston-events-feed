@@ -1,7 +1,14 @@
-# Boston cheap-events Slack feed
+# Boston events Slack feeds
 
-Posts a daily digest to Slack of whatever is happening *today* from The Boston
-Calendar's monthly ["N things to do in Boston for $10 or less"][example] column.
+Two daily Slack digests of cheap and free things happening in Boston *today*:
+
+| Feed | Source | Filter | Posts |
+|---|---|---|---|
+| `boston_feed.py` | The Boston Calendar's monthly ["$10 or less"][example] column | everything the column lists | 9:00am |
+| `aiweek_feed.py` | [Boston AI Week schedule](https://aiweek.boston/schedule?free=true) | free **and** outside work hours | 9:30am |
+
+Both share `slack_digest.py` for delivery, so they render identically and
+support the same two webhook flavours.
 
 [example]: https://www.thebostoncalendar.com/events/102-things-to-do-in-boston-for-10-or-less-september-2026
 
@@ -57,7 +64,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 36 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 76 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -66,6 +73,48 @@ its labels as `<p><strong>When: </strong>Tue. 9/1</p>`, so any fixture written
 by hand as `<div>When: Tue. 9/1</div>` tests a shape the site never emits — and
 a scraper can pass that test while extracting nothing at all from the real
 page. The payload tests pin the Slack block limits (see below).
+
+## The AI Week feed
+
+Boston AI Week publishes 190 events; 163 are free. The digest lists the free
+ones happening today that are **outside work hours** — a weekday start at or
+after 5pm, or any time at the weekend. Virtual events are included and
+labelled `virtual`; events the page marks full are labelled `at capacity`.
+
+```
+🤖  10 free after-hours AI Week events — Tue 9/29
+
+•  Founders & Funders: BOS VC Reverse Pitch — 5pm–7pm
+     https://aiweek.boston/schedule/founders-and-funders-bos-vc-reverse-pitch
+•  Whiskey, Wine & Whiteboards — 5:30pm–7:30pm · Venture Lane
+     https://aiweek.boston/schedule/whiskey-wine-whiteboards-september-29
+•  AI in Action: Real Use Cases Driving Business Impact — 6pm–8pm · Questrom School of Business
+     https://aiweek.boston/schedule/ai-in-action-questrom-2026
+```
+
+**Why it scrapes the page rather than reading the .ics.** An iCalendar file has
+no price field, and Boston AI Week's export carries none — no `$` appears
+anywhere in it. The schedule page, by contrast, renders a price badge per event
+and applies `?free=true` **server-side** (163 cards versus 192, with zero paid
+events in the filtered response). So the page is the only source that can
+answer "is this free", and it stays current as hosts add events.
+
+The `--ics` flag parses a calendar file anyway, for pointing this at other
+calendars. On that path every event reads as free, because the format cannot
+say otherwise — sound only if the export was already filtered, and the run
+logs a warning saying so.
+
+Known rough edges in the source data, all handled:
+
+- 4 events say `Time: TBA`. They are surfaced with a `time TBA` label rather
+  than dropped, since a weekday TBA cannot be classified as after-hours.
+- The location field has RSVP counts appended (`Fan Pier8 going · 4
+  waitlisted · At capacity`), sometimes holds a bare URL, and often holds a
+  placeholder (`(venue revealed upon approval)`, `Greater Boston — venue TBA`).
+  These are cleaned or blanked; 139 of 160 yield a usable venue name.
+- Some titles run past 150 characters and are truncated on a word boundary.
+- Some titles contain `|`, which would silently truncate a Block Kit link
+  label, so it is replaced there.
 
 ## Setup
 

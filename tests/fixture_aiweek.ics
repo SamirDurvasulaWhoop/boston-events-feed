@@ -1,0 +1,109 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//aiweek.boston//Schedule//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Boston AI Week 2026 — Filtered
+X-WR-TIMEZONE:America/New_York
+BEGIN:VTIMEZONE
+TZID:America/New_York
+X-LIC-LOCATION:America/New_York
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+TZNAME:EDT
+DTSTART:20070311T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+TZNAME:EST
+DTSTART:20071104T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:enterprise-ai-mind-the-gap-a-talk-on-intelligence-applications-at-scale-by-ai-pr@aiweek.boston
+DTSTAMP:20260917T203129Z
+SEQUENCE:0
+STATUS:CONFIRMED
+DTSTART;TZID=America/New_York:20260824T180000
+DTEND;TZID=America/New_York:20260824T190000
+SUMMARY:Enterprise AI: Mind the gap! A talk on intelligence applications 
+ at scale by AI practitioners!
+DESCRIPTION:There is a gap between data and decisions in most enterprises
+ . To bridge this gap\, you need to set up a factory that produces intelli
+ gence at scale. The factory runs on a framework recognized by IDC\, Gartn
+ er\, and Google. ICUPP: Infrastructure\, Collection\, Unification\, Proce
+ ssing\, and Presentation of
+LOCATION:Findability Sciences Office at Workbar Burlington\n100 Summit Dr
+ \, Ste 917\, Burlington\, MA 01880\n3rd floor in the building\, 100 Summi
+ t Dr\, Ste 917\, Burlington\, MA 01880
+URL:https://aiweek.boston/schedule/enterprise-ai-mind-the-gap-a-talk-on-i
+ ntelligence-applications-at-scale-by-ai-pr
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Enterprise AI: Mind the gap! A talk on intelligence applicati
+ ons at scale by AI practitioners!
+TRIGGER:-P1D
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Enterprise AI: Mind the gap! A talk on intelligence applicati
+ ons at scale by AI practitioners!
+TRIGGER:-PT1H
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:boston-ai-week-meets-the-world@aiweek.boston
+DTSTAMP:20260917T203129Z
+SEQUENCE:0
+STATUS:CONFIRMED
+DTSTART;TZID=America/New_York:20260916T110000
+DTEND;TZID=America/New_York:20260916T130000
+SUMMARY:Boston AI Week Meets the World
+DESCRIPTION:Representatives from 18 countries spend the morning with the 
+ Boston AI Week Board of Directors. Private\, invitation-only session. Tim
+ e and location to be announced.
+LOCATION:Private — location shared with invited guests
+URL:https://aiweek.boston/schedule/boston-ai-week-meets-the-world
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Boston AI Week Meets the World
+TRIGGER:-P1D
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Boston AI Week Meets the World
+TRIGGER:-PT1H
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:hey-hub-come-here-bostons-voice-ai-meetup@aiweek.boston
+DTSTAMP:20260917T203129Z
+SEQUENCE:0
+STATUS:CONFIRMED
+DTSTART;TZID=America/New_York:20260916T170000
+DTEND;TZID=America/New_York:20260916T193000
+SUMMARY:Hey Hub Come Here- Boston's Voice AI Meetup
+DESCRIPTION:The inaugural Boston Voice AI Meetup is happening at Build617
+ !\n\n​Join founders\, product leaders\, and developers interested voice A
+ I. Are you a:\n\n​vendor selling voice AI technologies to other businesse
+ s?\n\n​product leader deploying voice agents for customer interaction?\n\
+ n​developer exploring use case
+LOCATION:Build617\, 38 Chauncey Street\, Boston\, MA (Downtown Crossing)
+URL:https://aiweek.boston/schedule/hey-hub-come-here-bostons-voice-ai-mee
+ tup
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Hey Hub Come Here- Boston's Voice AI Meetup
+TRIGGER:-P1D
+END:VALARM
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Hey Hub Come Here- Boston's Voice AI Meetup
+TRIGGER:-PT1H
+END:VALARM
+END:VEVENT
+END:VCALENDAR
