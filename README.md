@@ -161,11 +161,14 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
 
 ## Notes and known edges
 
-- **Post time drifts with DST.** GitHub cron is UTC-only, so `0 12 * * *` is
-  8am Boston in summer and 7am in winter. Change it to `0 13 * * *` around
-  November if the winter hour bothers you. GitHub also delays scheduled runs
-  under load, sometimes by up to an hour — the digest is not minute-accurate by
-  design.
+- **Post time drifts with DST.** The target is 9am Boston. GitHub cron is
+  UTC-only with no DST handling, so `0 13 * * *` is 9am during EDT and 8am
+  during EST — change it to `0 14 * * *` after the November clock change and
+  back again in March. A single cron entry is deliberate: the alternative is
+  two entries (13:00 and 14:00 UTC) gated on `--expect-hour 9`, which is
+  exact year-round but skips the day entirely whenever GitHub delays a run
+  past the hour boundary, which it does under load. An hour of seasonal drift
+  beats a silently missed post. Either way the digest is not minute-accurate.
 - **The source is a hand-written column.** Its typos pass straight through
   (September's post really does list the Public Garden Swan Boats as being in
   Allston). The script reports what the column says.

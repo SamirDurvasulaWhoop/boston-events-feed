@@ -2,10 +2,10 @@ name: Daily Boston events digest
 
 on:
   schedule:
-    # 12:00 UTC = 8:00am Boston during EDT, 7:00am during EST.
-    # GitHub cron is UTC-only and has no DST handling; see README if you want
-    # to flip this to "0 13 * * *" for the winter months.
-    - cron: "0 12 * * *"
+    # 13:00 UTC = 9:00am Boston during EDT, 8:00am during EST.
+    # GitHub cron is UTC-only with no DST handling, so flip this to
+    # "0 14 * * *" after the November clock change to stay at 9am.
+    - cron: "0 13 * * *"
   workflow_dispatch:
     inputs:
       date:
