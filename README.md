@@ -41,8 +41,10 @@ every day they're open, tagged with their end date.
 
    Anything it can't read is logged loudly to stderr (which surfaces as a
    GitHub Actions warning) rather than silently dropped.
-4. **Posts today's events** to a Slack incoming webhook. On days with nothing
-   listed it stays quiet by default.
+4. **Posts today's events** to a Slack webhook — either a classic incoming
+   webhook (Block Kit) or a Workflow Builder trigger (a flat `text` variable),
+   picked automatically from the URL shape. On days with nothing listed it
+   stays quiet by default.
 
 Verified against the June, July, August, and September 2026 posts: 416 entries
 parsed, zero unrecognized dates, zero dates leaking outside their month.
@@ -50,7 +52,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 22 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 31 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -62,16 +64,32 @@ page. The payload tests pin the Slack block limits (see below).
 
 ## Setup
 
-### 1. Slack incoming webhook
+### 1. Slack webhook
 
-1. Go to <https://api.slack.com/apps> → **Create New App** → **From scratch**.
-   Name it something like `Boston Events` and pick your workspace.
-2. **Incoming Webhooks** → toggle **On** → **Add New Webhook to Workspace**.
-3. Choose **#events** and **Allow**. Copy the
-   `https://hooks.slack.com/services/...` URL.
+Two kinds of webhook work, and the script auto-detects which one you gave it
+from the URL shape. No flag to set.
 
-That URL is a credential — anyone holding it can post to #events. Keep it in
-the Actions secret below, not in this repo.
+**Workflow Builder trigger** (what this setup uses) — needed on workspaces
+where you can't install a custom app, which is the case on Whoop's Slack
+Enterprise Grid org:
+
+1. Slack → workspace name → **Tools & settings** → **Workflow Builder** → **New**
+2. Trigger: **Starts with a webhook**. Add a data variable named `text`,
+   type **Text**.
+3. Step: **Send a message to a channel** → **#events** → insert the `text`
+   variable as the entire message body.
+4. **Publish**, then copy the `https://hooks.slack.com/triggers/...` URL.
+
+**Classic incoming webhook** — simpler, but requires permission to install a
+Slack app:
+
+1. <https://api.slack.com/apps> → **Create New App** → **Blank app**
+2. **Incoming Webhooks** → **On** → **Add New Webhook to Workspace** → **#events**
+3. Copy the `https://hooks.slack.com/services/...` URL
+
+Either URL is a credential — anyone holding it can post to #events. Keep it in
+the Actions secret below, never in this repo. If one leaks, delete the trigger
+or webhook in Slack and issue a new one.
 
 ### 2. GitHub repo
 
@@ -105,8 +123,11 @@ or continuity reasons, an org admin has to enable Actions for the repo first.
 # Locally, no Slack involved:
 python3 boston_feed.py --dry-run
 
+# Preview the Workflow Builder payload specifically:
+python3 boston_feed.py --workflow-payload --dry-run
+
 # End-to-end into #events:
-SLACK_WEBHOOK_URL="https://hooks.slack.com/services/..." python3 boston_feed.py
+SLACK_WEBHOOK_URL="https://hooks.slack.com/triggers/..." python3 boston_feed.py
 ```
 
 Then trigger the real thing once from GitHub: **Actions** → *Daily Boston
@@ -121,6 +142,7 @@ smoke test). After that it runs itself every morning.
 | `--dry-run` | Print the payload and a rendered preview, post nothing |
 | `--post-when-empty` | Post a "nothing today" note instead of staying silent |
 | `--expect-hour 8` | Exit unless the current Boston hour matches; for DST-safe local cron |
+| `--workflow-payload` | Force the flat Workflow Builder payload; useful with `--dry-run` |
 
 Set the `SOURCE_URL` env var (or a GitHub Actions repo variable of that name)
 to pin the job to a specific post URL if monthly discovery ever breaks.
@@ -144,5 +166,13 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
   at 50 blocks. September 12th had 26 events (3496 characters), so the list is
   packed across multiple section blocks instead of being truncated. Worst
   observed month needs 4 blocks, well inside the limit.
+- **Workflow Builder mode has no block structure.** The whole digest goes over
+  as one text variable, so the per-section packing does not apply and the
+  headline is bold text rather than a separate header block. Slack caps a
+  single message at 4000 characters and the 26-event Sep 12 runs 3711, so the
+  headroom is thin: past 3900 the tail events are dropped with a "+N more"
+  link rather than risking rejection of the whole post. Multi-day runs sort
+  last and so get dropped first, since they recur the next day anyway. No day
+  across June–September 2026 needed trimming.
 - **Scope.** Only events the column lists get posted; this is a reader of that
   column, not a general Boston Calendar crawler.

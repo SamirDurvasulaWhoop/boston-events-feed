@@ -30,6 +30,8 @@ SITEMAP = f"{SITE}/sitemap.xml"
 SLUG_RE = r"[a-z0-9-]*?things-to-do-in-boston-for-10-or-less-{month}-{year}"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) boston-events-feed/1.0"
 EASTERN = ZoneInfo("America/New_York")
+# Slack rejects a message over 4000 chars; leave room for the trim notice.
+WORKFLOW_TEXT_LIMIT = 3900
 
 WEEKDAYS = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
@@ -248,11 +250,13 @@ def normalize_cost(cost: str) -> str:
     return "Free" if cleaned.lower() in {"free", "$free", "free!", "$0"} else cleaned
 
 
-def build_message(events: list[Event], today: date, source_url: str, source_title: str) -> dict:
+def digest_headline(events: list[Event], today: date) -> str:
     day_label = today.strftime("%a %-m/%-d")
     count = len(events)
-    headline = f"{count} cheap thing{'s' if count != 1 else ''} in Boston today — {day_label}"
+    return f"{count} cheap thing{'s' if count != 1 else ''} in Boston today — {day_label}"
 
+
+def digest_lines(events: list[Event], today: date) -> list[str]:
     lines = []
     for event in events:
         title = slack_escape(event.title)
@@ -268,6 +272,13 @@ def build_message(events: list[Event], today: date, source_url: str, source_titl
         if details:
             line += " — " + " · ".join(details)
         lines.append(line)
+    return lines
+
+
+def build_message(events: list[Event], today: date, source_url: str, source_title: str) -> dict:
+    """Block Kit payload, for a classic incoming webhook."""
+    headline = digest_headline(events, today)
+    lines = digest_lines(events, today)
 
     blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": f"🎟️  *{headline}*"}}]
     # Slack caps a section's text at 3000 chars, and a busy Saturday (26 events
@@ -303,6 +314,52 @@ def pack_lines(lines: list[str], limit: int) -> list[str]:
     return chunks
 
 
+def is_workflow_webhook(webhook: str) -> bool:
+    """Tell a Workflow Builder trigger from a classic incoming webhook.
+
+    Classic incoming webhooks are always hooks.slack.com/services/...
+    Workflow Builder has used several shapes over the years
+    (/triggers/, /workflows/, slack.com/shortcuts/...), so treat anything
+    that isn't /services/ as a workflow trigger.
+    """
+    return bool(webhook) and "/services/" not in webhook
+
+
+def build_workflow_payload(
+    events: list[Event], today: date, source_url: str, source_title: str
+) -> dict:
+    """Flat payload for a Workflow Builder webhook trigger.
+
+    Workflow Builder does not accept Block Kit -- the trigger takes the data
+    variables the workflow declares, and the workflow's own "send a message"
+    step does the posting. So the whole digest goes over as one Text variable
+    named `text`, which the workflow inserts as the message body.
+    """
+    headline = f"🎟️  *{digest_headline(events, today)}*"
+    attribution = f"From <{source_url}|{slack_escape(source_title)}>"
+    lines = digest_lines(events, today)
+
+    def assemble(shown: list[str], dropped: int) -> str:
+        if dropped:
+            tail = f"_+{dropped} more_ — see <{source_url}|the full list>"
+        else:
+            tail = attribution
+        return "\n".join([headline, "", *shown, "", tail])
+
+    # A single Slack message caps at 4000 characters and there are no blocks to
+    # spread across in this mode. A 26-event Saturday runs ~3700, so trim from
+    # the tail rather than risk the whole post being rejected. Multi-day runs
+    # sort last, so they are dropped first -- they recur tomorrow anyway.
+    body = assemble(lines, 0)
+    dropped = 0
+    while len(body) > WORKFLOW_TEXT_LIMIT and len(lines) - dropped > 1:
+        dropped += 1
+        body = assemble(lines[: len(lines) - dropped], dropped)
+    if dropped:
+        log(f"warning: trimmed {dropped} events to fit Slack's message limit")
+    return {"text": body}
+
+
 def post_to_slack(webhook: str, payload: dict) -> None:
     req = urllib.request.Request(
         webhook,
@@ -311,8 +368,19 @@ def post_to_slack(webhook: str, payload: dict) -> None:
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         body = resp.read().decode(errors="replace").strip()
-        if resp.status != 200 or body != "ok":
+        if resp.status != 200 or not slack_response_ok(body):
             raise SystemExit(f"Slack rejected the post: HTTP {resp.status} {body}")
+
+
+def slack_response_ok(body: str) -> bool:
+    """Classic incoming webhooks reply with the literal string "ok";
+    Workflow Builder triggers reply with JSON containing "ok": true."""
+    if body.strip() == "ok":
+        return True
+    try:
+        return json.loads(body).get("ok") is True
+    except (json.JSONDecodeError, AttributeError):
+        return False
 
 
 def log(message: str) -> None:
@@ -336,6 +404,11 @@ def main() -> int:
     parser.add_argument(
         "--post-when-empty", dest="quiet_when_empty", action="store_false",
         help="post a 'nothing today' message instead of staying silent",
+    )
+    parser.add_argument(
+        "--workflow-payload", action="store_true",
+        help="force the flat Workflow Builder payload (auto-detected from the "
+             "webhook URL otherwise); useful with --dry-run",
     )
     args = parser.parse_args()
 
@@ -366,39 +439,47 @@ def main() -> int:
     todays.sort(key=lambda e: (bool(e.end_date and e.end_date > today), e.number))
     log(f"{len(todays)} happening on {today}")
 
+    webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
+    workflow_mode = args.workflow_payload or is_workflow_webhook(webhook)
+    log(f"payload mode: {'workflow-builder' if workflow_mode else 'block-kit'}")
+
+    empty_text = (
+        f"🎟️  Nothing on the cheap list for *{today.strftime('%a %-m/%-d')}* — "
+        f"see <{source_url}|the full month>."
+    )
+
     if not todays:
         if args.quiet_when_empty:
             log("nothing today; staying quiet")
             return 0
-        payload = {
-            "text": f"No $10-or-less picks listed for {today.strftime('%a %-m/%-d')}.",
-            "blocks": [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": (
-                            f"🎟️  Nothing on the cheap list for *{today.strftime('%a %-m/%-d')}* — "
-                            f"see <{source_url}|the full month>."
-                        ),
-                    },
-                }
-            ],
-        }
+        payload = (
+            {"text": empty_text}
+            if workflow_mode
+            else {
+                "text": f"No $10-or-less picks listed for {today.strftime('%a %-m/%-d')}.",
+                "blocks": [
+                    {"type": "section", "text": {"type": "mrkdwn", "text": empty_text}}
+                ],
+            }
+        )
+    elif workflow_mode:
+        payload = build_workflow_payload(todays, today, source_url, source_title)
     else:
         payload = build_message(todays, today, source_url, source_title)
 
     if args.dry_run:
         print(json.dumps(payload, indent=2))
         print("\n--- rendered ---")
-        for block in payload["blocks"]:
-            if block["type"] == "section":
-                print(block["text"]["text"])
-            elif block["type"] == "context":
-                print(block["elements"][0]["text"])
+        if "blocks" not in payload:
+            print(payload["text"])
+        else:
+            for block in payload["blocks"]:
+                if block["type"] == "section":
+                    print(block["text"]["text"])
+                elif block["type"] == "context":
+                    print(block["elements"][0]["text"])
         return 0
 
-    webhook = os.environ.get("SLACK_WEBHOOK_URL")
     if not webhook:
         raise SystemExit("SLACK_WEBHOOK_URL is not set")
     post_to_slack(webhook, payload)
