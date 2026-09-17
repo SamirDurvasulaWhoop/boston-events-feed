@@ -6,18 +6,23 @@ Calendar's monthly ["N things to do in Boston for $10 or less"][example] column.
 [example]: https://www.thebostoncalendar.com/events/102-things-to-do-in-boston-for-10-or-less-september-2026
 
 ```
-🎟️  16 cheap things in Boston today — Sat 9/19
+🎟️  3 cheap things in Boston today — Thu 9/17
 
-• 21st Annual What the Fluff? Festival — Union Square · Free
-• Roslindale PorchFest — Roslindale · Free
-• Aeronaut Oktoberfest — Somerville · $10+
-• 2026 South End Open Studios — South End · Free · through 9/20
+•  Thursdays on the Lawn at the Loring Greenough House — Jamaica Plain · Free
+     https://www.thebostoncalendar.com/events/thursdays-on-the-lawn-at-the-loring-greenough-house--87
+•  'The Breakfast Club' Screening — Back Bay · Free
+     https://www.thebostoncalendar.com/events/breakfast-club-screening
+•  Third Thursdays at the MFA — Fenway · $5
+     https://www.thebostoncalendar.com/events/5-third-thursdays-at-the-museum-of-fine-arts--13
 
-From 102 things to do in Boston for $10 or less: September 2026
+Full list: https://www.thebostoncalendar.com/events/102-things-to-do-in-boston-for-10-or-less-september-2026
 ```
 
-Each title links to its Boston Calendar event page. Multi-day runs are listed
-every day they're open, tagged with their end date.
+The headline is bold in Slack and each URL is auto-linked. Multi-day runs are
+listed every day they're open, tagged with their end date. On a classic
+incoming webhook the same digest renders as Block Kit with the titles
+themselves as the links; see the setup section for why this deployment uses
+the plainer path.
 
 ## How it works
 
@@ -52,7 +57,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 31 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 36 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -74,11 +79,18 @@ where you can't install a custom app, which is the case on Whoop's Slack
 Enterprise Grid org:
 
 1. Slack → workspace name → **Tools & settings** → **Workflow Builder** → **New**
-2. Trigger: **Starts with a webhook**. Add a data variable named `text`,
-   type **Text**.
-3. Step: **Send a message to a channel** → **#events** → insert the `text`
-   variable as the entire message body.
+2. Trigger: **Starts with a webhook**. Add two data variables, both type
+   **Text**: `headline` and `text`.
+3. Step: **Send a message to a channel** → **#events**. The message body is
+   just the two variable chips: `headline`, a blank line, then `text`. Select
+   the `headline` chip and press **⌘B**.
 4. **Publish**, then copy the `https://hooks.slack.com/triggers/...` URL.
+
+The bold has to be applied to the chip in the step, not in the text the script
+sends: Workflow Builder substitutes variables as literal characters, so
+`*bold*` arrives as asterisks and `<url|label>` as punctuation. Slack does
+apply the step's own rich-text styling to whatever a variable resolves to,
+which is the one way to get real formatting on this path.
 
 **Classic incoming webhook** — simpler, but requires permission to install a
 Slack app:
@@ -166,13 +178,19 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
   at 50 blocks. September 12th had 26 events (3496 characters), so the list is
   packed across multiple section blocks instead of being truncated. Worst
   observed month needs 4 blocks, well inside the limit.
-- **Workflow Builder mode has no block structure.** The whole digest goes over
-  as one text variable, so the per-section packing does not apply and the
-  headline is bold text rather than a separate header block. Slack caps a
-  single message at 4000 characters and the 26-event Sep 12 runs 3711, so the
-  headroom is thin: past 3900 the tail events are dropped with a "+N more"
-  link rather than risking rejection of the whole post. Multi-day runs sort
-  last and so get dropped first, since they recur the next day anyway. No day
-  across June–September 2026 needed trimming.
+- **Workflow Builder mode is plain text.** No Block Kit, no mrkdwn, no link
+  labels, and escaping must be skipped or `&amp;` shows up verbatim. Event
+  links are therefore bare URLs on their own indented line, which Slack
+  auto-links. The per-section packing does not apply; Slack's 4000-character
+  single-message cap does, and the 26-event Sep 12 runs 3754. Past 3900 the
+  tail events are dropped with a "+N more" link rather than risking rejection
+  of the whole post — multi-day runs sort last and so go first, since they
+  recur the next day anyway. No day across June–September 2026 needed
+  trimming.
+- **The classic-webhook path is still supported and looks better.** It gets a
+  header block, titles as clickable link text instead of raw URLs, and
+  multi-block packing. If a Slack admin ever provisions an incoming webhook,
+  swapping the secret is the only change needed; the URL shape switches the
+  renderer automatically.
 - **Scope.** Only events the column lists get posted; this is a reader of that
   column, not a general Boston Calendar crawler.

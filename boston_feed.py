@@ -256,21 +256,37 @@ def digest_headline(events: list[Event], today: date) -> str:
     return f"{count} cheap thing{'s' if count != 1 else ''} in Boston today — {day_label}"
 
 
-def digest_lines(events: list[Event], today: date) -> list[str]:
+def digest_lines(events: list[Event], today: date, plain: bool = False) -> list[str]:
+    """One bullet per event.
+
+    `plain=True` is for Workflow Builder, which substitutes data variables as
+    literal text: mrkdwn is not interpreted, so `*bold*` and `<url|label>`
+    would show up as punctuation and `&amp;` as itself. So no markup and no
+    escaping in that mode.
+    """
     lines = []
     for event in events:
-        title = slack_escape(event.title)
-        url = absolute(event.url)
-        line = f"• <{url}|{title}>" if url else f"• *{title}*"
+        if plain:
+            line = f"•  {event.title}"
+        else:
+            title = slack_escape(event.title)
+            url = absolute(event.url)
+            line = f"• <{url}|{title}>" if url else f"• *{title}*"
 
-        details = [slack_escape(event.where)] if event.where else []
+        where = event.where if plain else slack_escape(event.where)
+        details = [where] if event.where else []
         cost = normalize_cost(event.cost)
         if cost:
-            details.append(slack_escape(cost))
+            details.append(cost if plain else slack_escape(cost))
         if event.end_date and event.end_date > today:
             details.append(f"through {event.end_date.strftime('%-m/%-d')}")
         if details:
             line += " — " + " · ".join(details)
+        if plain and absolute(event.url):
+            # Bare URL on its own indented line: Slack auto-links it, and
+            # there is no link-text syntax available in this mode. One entry
+            # per event (newline included) keeps the trimming logic honest.
+            line += f"\n     {absolute(event.url)}"
         lines.append(line)
     return lines
 
@@ -332,32 +348,41 @@ def build_workflow_payload(
 
     Workflow Builder does not accept Block Kit -- the trigger takes the data
     variables the workflow declares, and the workflow's own "send a message"
-    step does the posting. So the whole digest goes over as one Text variable
-    named `text`, which the workflow inserts as the message body.
-    """
-    headline = f"🎟️  *{digest_headline(events, today)}*"
-    attribution = f"From <{source_url}|{slack_escape(source_title)}>"
-    lines = digest_lines(events, today)
+    step does the posting. Variables are substituted as literal text, so mrkdwn
+    in them renders as punctuation.
 
-    def assemble(shown: list[str], dropped: int) -> str:
-        if dropped:
-            tail = f"_+{dropped} more_ — see <{source_url}|the full list>"
-        else:
-            tail = attribution
-        return "\n".join([headline, "", *shown, "", tail])
+    Hence two variables rather than one: `headline` and `text`. The workflow's
+    message step applies bold to the `headline` chip, which is the only way to
+    get real formatting in this mode -- Slack applies the step's own rich-text
+    styling to whatever the variable resolves to.
+    """
+    headline = f"🎟️  {digest_headline(events, today)}"
+    lines = digest_lines(events, today, plain=True)
+
+    def assemble_body(shown: list[str], dropped: int) -> str:
+        # A bare URL is the only thing Slack will still auto-link here, so the
+        # source goes on its own line rather than behind link text. Per-event
+        # links are dropped in this mode: 26 full Boston Calendar URLs would
+        # dwarf the event names and blow the message limit.
+        tail = f"+{dropped} more — full list: {source_url}" if dropped else (
+            f"Full list: {source_url}"
+        )
+        return "\n".join([*shown, "", tail])
 
     # A single Slack message caps at 4000 characters and there are no blocks to
-    # spread across in this mode. A 26-event Saturday runs ~3700, so trim from
+    # spread across in this mode. A 26-event Saturday runs ~3750, so trim from
     # the tail rather than risk the whole post being rejected. Multi-day runs
     # sort last, so they are dropped first -- they recur tomorrow anyway.
-    body = assemble(lines, 0)
+    body = assemble_body(lines, 0)
     dropped = 0
-    while len(body) > WORKFLOW_TEXT_LIMIT and len(lines) - dropped > 1:
+    while (
+        len(headline) + len(body) > WORKFLOW_TEXT_LIMIT and len(lines) - dropped > 1
+    ):
         dropped += 1
-        body = assemble(lines[: len(lines) - dropped], dropped)
+        body = assemble_body(lines[: len(lines) - dropped], dropped)
     if dropped:
         log(f"warning: trimmed {dropped} events to fit Slack's message limit")
-    return {"text": body}
+    return {"headline": headline, "text": body}
 
 
 def post_to_slack(webhook: str, payload: dict) -> None:
@@ -453,7 +478,11 @@ def main() -> int:
             log("nothing today; staying quiet")
             return 0
         payload = (
-            {"text": empty_text}
+            {
+                "headline": f"🎟️  Nothing on the cheap list for "
+                            f"{today.strftime('%a %-m/%-d')}",
+                "text": f"Full list: {source_url}",
+            }
             if workflow_mode
             else {
                 "text": f"No $10-or-less picks listed for {today.strftime('%a %-m/%-d')}.",
@@ -471,6 +500,8 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         print("\n--- rendered ---")
         if "blocks" not in payload:
+            # Mirrors how the workflow step renders it: bold headline, then body.
+            print(f"[bold] {payload['headline']}")
             print(payload["text"])
         else:
             for block in payload["blocks"]:

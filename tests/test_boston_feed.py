@@ -187,20 +187,42 @@ class TestWorkflowPayload(unittest.TestCase):
             self.events(count), date(2026, 9, 17), "https://example.com/post", "Source"
         )
 
-    def test_is_a_single_text_variable(self):
+    def test_sends_exactly_the_two_declared_variables(self):
         payload = self.payload()
-        self.assertEqual(list(payload), ["text"])
-        self.assertIsInstance(payload["text"], str)
+        self.assertEqual(sorted(payload), ["headline", "text"])
+        for value in payload.values():
+            self.assertIsInstance(value, str)
 
-    def test_contains_headline_every_event_and_attribution(self):
+    def test_headline_is_separate_so_the_step_can_bold_it(self):
+        payload = self.payload(5)
+        self.assertIn("5 cheap things in Boston today — Thu 9/17", payload["headline"])
+        self.assertNotIn(
+            "cheap things", payload["text"], "headline must not be duplicated in body"
+        )
+
+    def test_body_holds_every_event_and_the_attribution(self):
         text = self.payload(5)["text"]
-        self.assertIn("5 cheap things in Boston today — Thu 9/17", text)
         for i in range(5):
             self.assertIn(f"Event {i}", text)
         self.assertIn("https://example.com/post", text)
 
-    def test_urls_are_absolute(self):
-        self.assertIn(f"{bf.SITE}/events/event-0", self.payload()["text"])
+    def test_carries_no_markup_because_workflow_builder_renders_it_literally(self):
+        text = self.payload()["text"]
+        self.assertNotIn("<http", text, "link syntax would show as punctuation")
+        self.assertNotIn("|", text, "link syntax would show as punctuation")
+        self.assertNotIn("*", text, "asterisks would show as asterisks")
+        self.assertNotIn("&amp;", text, "escapes would show as themselves")
+
+    def test_source_link_is_a_bare_auto_linkable_url(self):
+        self.assertIn("Full list: https://example.com/post", self.payload()["text"])
+
+    def test_ampersands_survive_unescaped(self):
+        event = self.events(1)[0]
+        event.where = "Downtown & Jamaica Plain"
+        text = bf.build_workflow_payload(
+            [event], date(2026, 9, 17), "https://example.com/post", "Source"
+        )["text"]
+        self.assertIn("Downtown & Jamaica Plain", text)
 
     def test_classic_webhook_is_not_workflow_mode(self):
         self.assertFalse(
