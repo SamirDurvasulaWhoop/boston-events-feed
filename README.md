@@ -77,8 +77,8 @@ the Actions secret below, not in this repo.
 
 ```bash
 cd boston-events-feed
-gh repo create WhoopInc/boston-events-feed --private --source=. --push
-gh secret set SLACK_WEBHOOK_URL --repo WhoopInc/boston-events-feed
+gh repo create boston-events-feed --private --source=. --push
+gh secret set SLACK_WEBHOOK_URL
 ```
 
 `gh repo create --source=. --push` creates the remote and pushes in one step —
@@ -88,9 +88,16 @@ will conflict with this history.
 Run `gh secret set` yourself rather than pasting the webhook anywhere: it reads
 the value from your terminal straight into GitHub's encrypted secret store.
 
-A private repo is fine — Actions cron works the same. Note that scheduled
-workflows only run on the **default branch**, so keep `daily-digest.yml` on
-`main`.
+A private repo is fine — Actions cron works the same, and a daily one-minute
+job sits far inside the free tier. Scheduled workflows only run on the
+**default branch**, so keep `daily-digest.yml` on `main`.
+
+**This deliberately lives on a personal account, not the WhoopInc org.** That
+org disables Actions at the org level (a repo admin cannot override it), and
+its rulesets require a Jira ticket in every commit message plus a peer
+approval for any change to `main` — which is more process than a personal
+events digest warrants. If it ever needs to move into the org for ownership
+or continuity reasons, an org admin has to enable Actions for the repo first.
 
 ### 3. Verify
 
