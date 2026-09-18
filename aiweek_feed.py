@@ -395,7 +395,7 @@ def main() -> int:
     # Events" and can be retired after the festival without touching the other
     # feed), falling back to the shared one if that is not configured.
     webhook = (
-        os.environ.get("SLACK_WEBHOOK_URL_AIWEEK", "").strip()
+        os.environ.get("SLACK_WEBHOOK_URL_AI_WEEK", "").strip()
         or os.environ.get("SLACK_WEBHOOK_URL", "").strip()
     )
     workflow_mode = args.workflow_payload or slack.is_workflow_webhook(webhook)

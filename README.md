@@ -108,7 +108,7 @@ It posts through its **own** Slack workflow, named `Boston AI Week Events`, so
 the posts are attributed separately and the whole thing can be retired after
 the festival without touching the other feed. Set it up exactly like the first
 (same `headline` + `text` variables, same bold on the headline chip) and store
-it as the `SLACK_WEBHOOK_URL_AIWEEK` secret. If that secret is absent the feed
+it as the `SLACK_WEBHOOK_URL_AI_WEEK` secret. If that secret is absent the feed
 falls back to the shared `SLACK_WEBHOOK_URL`, so it works either way.
 
 Known rough edges in the source data, all handled:
