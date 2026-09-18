@@ -2,11 +2,12 @@ name: Daily AI Week digest
 
 on:
   schedule:
-    # 13:30 UTC = 9:30am Boston during EDT, 8:30am during EST. Half an hour
-    # after the Boston Calendar digest so the two do not land together.
-    # GitHub cron is UTC-only with no DST handling; shift to "30 14 * * *"
-    # after the November clock change to stay at 9:30am.
-    - cron: "30 13 * * *"
+    # 13:37 UTC = 9:37am Boston during EDT, 8:37am during EST. Half an hour
+    # after the Boston Calendar digest so the two do not land together, and
+    # off the top/half of the hour, which are GitHub's busiest cron slots.
+    # GitHub cron is UTC-only with no DST handling; shift to "37 14 * * *"
+    # after the November clock change.
+    - cron: "37 13 * * *"
   workflow_dispatch:
     inputs:
       date:

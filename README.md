@@ -4,8 +4,8 @@ Two daily Slack digests of cheap and free things happening in Boston *today*:
 
 | Feed | Source | Filter | Posts |
 |---|---|---|---|
-| `boston_feed.py` | The Boston Calendar's monthly ["$10 or less"][example] column | everything the column lists | 9:00am |
-| `aiweek_feed.py` | [Boston AI Week schedule](https://aiweek.boston/schedule?free=true) | free **and** outside work hours | 9:30am |
+| `boston_feed.py` | The Boston Calendar's monthly ["$10 or less"][example] column | everything the column lists | 9:07am |
+| `aiweek_feed.py` | [Boston AI Week schedule](https://aiweek.boston/schedule?free=true) | free **and** outside work hours | 9:37am |
 
 Both share `slack_digest.py` for delivery, so they render identically and
 support the same two webhook flavours.
@@ -217,44 +217,14 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
 
 ## Notes and known edges
 
-- **Post time drifts with DST.** The target is 9am Boston. GitHub cron is
-  UTC-only with no DST handling, so `0 13 * * *` is 9am during EDT and 8am
-  during EST — change it to `0 14 * * *` after the November clock change and
-  back again in March. A single cron entry is deliberate: the alternative is
-  two entries (13:00 and 14:00 UTC) gated on `--expect-hour 9`, which is
-  exact year-round but skips the day entirely whenever GitHub delays a run
-  past the hour boundary, which it does under load. An hour of seasonal drift
-  beats a silently missed post. Either way the digest is not minute-accurate.
-- **The source is a hand-written column.** Its typos pass straight through
-  (September's post really does list the Public Garden Swan Boats as being in
-  Allston). The script reports what the column says.
-- **New month, missing post.** If the column for a new month isn't up yet on
-  the 1st, the run fails loudly so GitHub emails you, rather than posting an
-  empty digest. It recovers on its own once the post is published.
-- **If the site's HTML changes**, parsing fails fast with
-  `page layout changed: ...` instead of posting a half-empty message.
-- **Slack block limits.** A section block caps at 3000 characters and a message
-  at 50 blocks. September 12th had 26 events (3496 characters), so the list is
-  packed across multiple section blocks instead of being truncated. Worst
-  observed month needs 4 blocks, well inside the limit.
-- **Workflow Builder mode is plain text.** No Block Kit, no mrkdwn, no link
-  labels, and escaping must be skipped or `&amp;` shows up verbatim. Event
-  links are therefore bare URLs on their own indented line, which Slack
-  auto-links. The per-section packing does not apply; Slack's 4000-character
-  single-message cap does, and the 26-event Sep 12 runs 3754. Past 3900 the
-  tail events are dropped with a "+N more" link rather than risking rejection
-  of the whole post — multi-day runs sort last and so go first, since they
-  recur the next day anyway. No day across June–September 2026 needed
-  trimming.
-- **The classic-webhook path is still supported and looks better.** It gets a
-  header block, titles as clickable link text instead of raw URLs, and
-  multi-block packing. If a Slack admin ever provisions an incoming webhook,
-  swapping the secret is the only change needed; the URL shape switches the
-  renderer automatically.
-- **Scope.** Only events the column lists get posted; this is a reader of that
-  column, not a general Boston Calendar crawler.
-- **The AI Week feed expires.** Its events run Aug 24 – Oct 28 2026, bunched
-  into Sep 22 – Oct 2. Once past that it will find nothing and stay silent
-  forever rather than erroring, so delete `aiweek-digest.yml` and the
-  `Boston AI Week Events` Slack workflow in November rather than leaving a
-  cron that can never post.
+- **Post time drifts with DST, and never schedule on the hour.** The target is
+  ~9am Boston. GitHub cron is UTC-only with no DST handling, so `7 13 * * *`
+  is 9:07am during EDT and 8:07am during EST — shift to `7 14 * * *` after the
+  November clock change. The odd minutes are deliberate: the first version used
+  `0 13 * * *` and GitHub silently skipped it entirely, producing no run at
+  all rather than a late one. GitHub sheds scheduled-workflow load at the top
+  of the hour, so `:00` and `:30` are the worst slots to pick.
+- **A dropped run means a missed day, silently.** There is no state and no
+  retry, so a skipped schedule just means no post — nothing errors and nothing
+  emails you. If a morning goes quiet, check the Actions tab before suspecting
+  the scrapers.

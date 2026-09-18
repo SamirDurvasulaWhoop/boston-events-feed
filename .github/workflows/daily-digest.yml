@@ -2,10 +2,12 @@ name: Daily Boston events digest
 
 on:
   schedule:
-    # 13:00 UTC = 9:00am Boston during EDT, 8:00am during EST.
+    # 13:07 UTC = 9:07am Boston during EDT, 8:07am during EST.
+    # Deliberately off the top of the hour: GitHub sheds scheduled-run load at
+    # :00 by dropping runs outright, and a 13:00 entry was silently skipped.
     # GitHub cron is UTC-only with no DST handling, so flip this to
-    # "0 14 * * *" after the November clock change to stay at 9am.
-    - cron: "0 13 * * *"
+    # "7 14 * * *" after the November clock change to stay near 9am.
+    - cron: "7 13 * * *"
   workflow_dispatch:
     inputs:
       date:
