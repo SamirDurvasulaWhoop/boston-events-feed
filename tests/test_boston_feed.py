@@ -315,6 +315,75 @@ class TestSlackResponseHandling(unittest.TestCase):
                 self.assertFalse(bf.slack_response_ok(body))
 
 
+class TestReactionMarkers(unittest.TestCase):
+    """Events are numbered so readers can react with the matching keycap."""
+
+    def test_first_ten_get_keycaps(self):
+        import slack_digest as sd
+
+        self.assertEqual(sd.marker(0), "1️⃣")
+        self.assertEqual(sd.marker(8), "9️⃣")
+        self.assertEqual(sd.marker(9), "🔟")
+
+    def test_past_ten_falls_back_to_a_bullet(self):
+        import slack_digest as sd
+
+        self.assertEqual(sd.marker(10), "•")
+        self.assertEqual(sd.marker(25), "•")
+
+    def test_hint_stays_short_to_protect_the_char_budget(self):
+        import slack_digest as sd
+
+        for count in (2, 5, 26):
+            with self.subTest(count):
+                self.assertIn("number", sd.react_hint(count))
+                self.assertLessEqual(len(sd.react_hint(count)), 60)
+
+    def test_hint_is_singular_for_one_event(self):
+        import slack_digest as sd
+
+        self.assertEqual(sd.react_hint(1), "React with 1️⃣ if you're going.")
+
+    def test_daily_digest_numbers_its_events(self):
+        events = [
+            bf.Event(number=i, title=f"Event {i}", url=f"/e{i}", when_raw="",
+                     where="Somerville", cost="Free", info="",
+                     dates=[date(2026, 9, 12)])
+            for i in range(12)
+        ]
+        lines = bf.digest_lines(events, date(2026, 9, 12), plain=True)
+        self.assertTrue(lines[0].startswith("1️⃣"))
+        self.assertTrue(lines[9].startswith("🔟"))
+        self.assertTrue(lines[10].startswith("•"), "eleventh falls back")
+
+    def test_weekly_digest_is_not_numbered(self):
+        """Numbering across day groups would restart or mislead, so it is left off."""
+        events = [
+            bf.Event(number=i, title=f"Event {i}", url=f"/e{i}", when_raw="",
+                     where="Somerville", cost="Free", info="",
+                     dates=[date(2026, 9, 21)])
+            for i in range(3)
+        ]
+        lines = bf.weekly_lines(events, date(2026, 9, 21), plain=True)
+        self.assertNotIn("1️⃣", "\n".join(lines))
+
+    def test_numbering_does_not_push_a_busy_day_over_the_limit(self):
+        import slack_digest as sd
+
+        events = [
+            bf.Event(number=i, title=f"Event {i} with a realistic length title",
+                     url=f"/events/event-number-{i}", when_raw="", where="Somerville",
+                     cost="Free", info="", dates=[date(2026, 9, 12)])
+            for i in range(26)
+        ]
+        payload = bf.build_workflow_payload(
+            events, date(2026, 9, 12), "https://example.com/post", "Source"
+        )
+        self.assertLessEqual(
+            len(payload["headline"]) + len(payload["text"]), sd.WORKFLOW_TEXT_LIMIT
+        )
+
+
 class TestWeeklyDigest(unittest.TestCase):
     MONDAY = date(2026, 9, 21)
 

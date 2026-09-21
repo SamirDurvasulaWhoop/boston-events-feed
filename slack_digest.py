@@ -29,6 +29,30 @@ SECTION_LIMIT = 2900
 WORKFLOW_TEXT_LIMIT = 3900
 
 
+# Keycap emoji, so readers can react with the number beside an event to say
+# they are going. Stops at 10: there is no 11th keycap, and regional-indicator
+# letters are effectively unfindable in the emoji picker. Events past the tenth
+# fall back to a plain bullet -- 14% of days run longer than this.
+NUMBER_MARKERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+PLAIN_MARKER = "•"
+
+
+def marker(index: int) -> str:
+    """Reaction marker for the index-th event in a digest (0-based)."""
+    return NUMBER_MARKERS[index] if index < len(NUMBER_MARKERS) else PLAIN_MARKER
+
+
+def react_hint(count: int) -> str:
+    """Footer line explaining the convention.
+
+    Kept short on purpose: spelling out the keycap range costs ~35 characters
+    of a 3900 budget, and the busiest observed day already runs 3790.
+    """
+    if count <= 1:
+        return "React with 1️⃣ if you're going."
+    return "React with an event's number if you're going."
+
+
 def log(message: str) -> None:
     print(message, file=sys.stderr)
 

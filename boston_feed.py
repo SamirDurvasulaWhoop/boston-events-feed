@@ -269,13 +269,14 @@ def digest_lines(events: list[Event], today: date, plain: bool = False) -> list[
     escaping in that mode.
     """
     lines = []
-    for event in events:
+    for index, event in enumerate(events):
+        mark = slack.marker(index)
         if plain:
-            line = f"•  {event.title}"
+            line = f"{mark}  {event.title}"
         else:
             title = slack_escape(event.title)
             url = absolute(event.url)
-            line = f"• <{url}|{title}>" if url else f"• *{title}*"
+            line = f"{mark} <{url}|{title}>" if url else f"{mark} *{title}*"
 
         where = event.where if plain else slack_escape(event.where)
         details = [where] if event.where else []
@@ -396,7 +397,11 @@ def build_message(events: list[Event], today: date, source_url: str, source_titl
         {
             "type": "context",
             "elements": [
-                {"type": "mrkdwn", "text": f"From <{source_url}|{slack_escape(source_title)}>"}
+                {
+                    "type": "mrkdwn",
+                    "text": f"{slack.react_hint(len(lines))}  ·  "
+                            f"From <{source_url}|{slack_escape(source_title)}>",
+                }
             ],
         }
     )
@@ -431,7 +436,8 @@ def build_workflow_payload(
         tail = f"+{dropped} more — full list: {source_url}" if dropped else (
             f"Full list: {source_url}"
         )
-        return "\n".join([*shown, "", tail])
+        hint = slack.react_hint(len(shown))
+        return "\n".join([*shown, "", hint, tail])
 
     # A single Slack message caps at 4000 characters and there are no blocks to
     # spread across in this mode. A 26-event Saturday runs ~3750, so trim from

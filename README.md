@@ -65,7 +65,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 88 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 95 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -123,6 +123,25 @@ Known rough edges in the source data, all handled:
 - Some titles run past 150 characters and are truncated on a word boundary.
 - Some titles contain `|`, which would silently truncate a Block Kit link
   label, so it is replaced there.
+
+## Reacting
+
+Daily digests number their events `1️⃣`–`🔟` so readers can react with the
+matching keycap to say they are going, with a footer line stating the
+convention. Events past the tenth get a plain bullet — there is no eleventh
+keycap, and regional-indicator letters are unfindable in the emoji picker.
+14% of days run longer than ten.
+
+The reactions are **not** pre-seeded, so readers pick the keycap from the
+picker themselves. Seeding them needs either `reactions.add` with a bot token
+(no app installs available here) or a fixed set of Workflow Builder "Add
+reaction" steps — but that step takes a literal emoji, not a variable, so a
+three-event day would get six numbers seeded with three of them meaningless.
+Gating each step behind a branch on an event-count variable would work and is
+the upgrade path if the convention catches on.
+
+The weekly digest is deliberately not numbered: it is grouped by day, so a
+single run of numbers across the groups reads as if it restarts.
 
 ## The weekly digest
 

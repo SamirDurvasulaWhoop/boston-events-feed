@@ -285,14 +285,15 @@ def short_location(event: Event) -> str:
 
 def digest_lines(events: list[Event], plain: bool) -> list[str]:
     lines = []
-    for event in events:
+    for index, event in enumerate(events):
+        mark = slack.marker(index)
         if plain:
-            head = f"•  {short_title(event.title)}"
+            head = f"{mark}  {short_title(event.title)}"
         else:
             # A pipe inside <url|text> would truncate the link label, and
             # several titles contain one ("Maven AGI | Boston AI Week | ...").
             title = slack.slack_escape(short_title(event.title)).replace("|", "·")
-            head = f"• <{event.url}|{title}>" if event.url else f"• *{title}*"
+            head = f"{mark} <{event.url}|{title}>" if event.url else f"{mark} *{title}*"
 
         details = [time_label(event)]
         location = short_location(event)
@@ -317,12 +318,13 @@ def build(events: list[Event], today: date, workflow_mode: bool) -> dict:
         f"{'s' if count != 1 else ''} — {today.strftime('%a %-m/%-d')}"
     )
     footer_url = SCHEDULE_URL
+    hint = slack.react_hint(count)
     return slack.build_payload(
         headline=headline,
         lines=digest_lines(events, plain=workflow_mode),
-        footer=f"From <{footer_url}|the free Boston AI Week schedule>",
+        footer=f"{hint}  ·  From <{footer_url}|the free Boston AI Week schedule>",
         workflow_mode=workflow_mode,
-        plain_footer=f"Full schedule: {footer_url}",
+        plain_footer=f"{hint}\nFull schedule: {footer_url}",
         overflow_footer=f"+{{dropped}} more — full schedule: {footer_url}",
     )
 
