@@ -1,0 +1,55 @@
+name: Weekly Boston events digest
+
+on:
+  schedule:
+    # Mondays at 13:12 UTC = 9:12am Boston during EDT, 8:12am during EST.
+    # Off the top of the hour (GitHub drops scheduled runs at :00 under load)
+    # and five minutes after the daily digest so the two do not collide.
+    # GitHub cron is UTC-only with no DST handling; shift to "12 14 * * 1"
+    # after the November clock change.
+    - cron: "12 13 * * 1"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Week starting this date (YYYY-MM-DD), blank for today"
+        required: false
+      dry_run:
+        description: "Print the message instead of posting to Slack"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: boston-weekly-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Post weekly digest
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SOURCE_URL: ${{ vars.SOURCE_URL }}
+          # Passed as env, not interpolated into the command line: workflow
+          # inputs are attacker-controllable text and `run:` interpolation
+          # would let them inject shell.
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--weekly)
+          if [ -n "$INPUT_DATE" ]; then args+=(--date "$INPUT_DATE"); fi
+          if [ "$INPUT_DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python boston_feed.py "${args[@]}"

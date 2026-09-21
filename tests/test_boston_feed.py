@@ -8,7 +8,7 @@ emits, and would happily pass while the scraper returned nothing.
 
 import sys
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -313,6 +313,110 @@ class TestSlackResponseHandling(unittest.TestCase):
         ):
             with self.subTest(body):
                 self.assertFalse(bf.slack_response_ok(body))
+
+
+class TestWeeklyDigest(unittest.TestCase):
+    MONDAY = date(2026, 9, 21)
+
+    def ev(self, number, title, dates, end_date=None, where="Somerville"):
+        return bf.Event(
+            number=number, title=title, url=f"/events/e{number}", when_raw="",
+            where=where, cost="Free", info="", dates=dates, end_date=end_date,
+        )
+
+    def test_week_days_is_seven_from_the_start(self):
+        days = bf.week_days(self.MONDAY)
+        self.assertEqual(len(days), 7)
+        self.assertEqual(days[0], self.MONDAY)
+        self.assertEqual(days[-1], date(2026, 9, 27))
+
+    def test_headline_span_within_one_month(self):
+        self.assertIn("Sep 21–27", bf.weekly_headline([], self.MONDAY))
+
+    def test_headline_span_across_a_month_boundary(self):
+        self.assertIn("Sep 28–Oct 4", bf.weekly_headline([], date(2026, 9, 28)))
+
+    def test_headline_pluralisation(self):
+        one = bf.weekly_headline([self.ev(1, "A", [self.MONDAY])], self.MONDAY)
+        self.assertIn("1 cheap thing in Boston this week", one)
+        two = bf.weekly_headline(
+            [self.ev(1, "A", [self.MONDAY]), self.ev(2, "B", [self.MONDAY])], self.MONDAY
+        )
+        self.assertIn("2 cheap things in Boston this week", two)
+
+    def test_multi_day_event_is_listed_once_under_its_first_day(self):
+        run = self.ev(
+            1, "Festival",
+            [date(2026, 9, 25), date(2026, 9, 26), date(2026, 9, 27)],
+            end_date=date(2026, 9, 27),
+        )
+        lines = bf.weekly_lines([run], self.MONDAY, plain=True)
+        self.assertEqual(
+            sum(1 for l in lines if "Festival" in l), 1, "\n".join(lines)
+        )
+        self.assertIn("Fri 9/25", lines)
+        self.assertNotIn("Sat 9/26", lines)
+
+    def test_multi_day_event_shows_its_end_date(self):
+        run = self.ev(
+            1, "Festival", [date(2026, 9, 25), date(2026, 9, 26)],
+            end_date=date(2026, 9, 26),
+        )
+        text = "\n".join(bf.weekly_lines([run], self.MONDAY, plain=True))
+        self.assertIn("through 9/26", text)
+
+    def test_recurring_series_lists_its_other_dates(self):
+        weekly = self.ev(1, "Matcha Meetup", [date(2026, 9, 23), date(2026, 9, 30)])
+        text = "\n".join(bf.weekly_lines([weekly], self.MONDAY, plain=True))
+        self.assertEqual(text.count("Matcha Meetup"), 1)
+        self.assertNotIn("9/30", text, "a date outside the window is not 'also'")
+
+    def test_event_starting_before_the_window_appears_on_its_first_day_inside(self):
+        run = self.ev(
+            1, "Long Run",
+            [date(2026, 9, 19), date(2026, 9, 20), date(2026, 9, 21)],
+            end_date=date(2026, 9, 21),
+        )
+        lines = bf.weekly_lines([run], self.MONDAY, plain=True)
+        self.assertEqual(lines[0], "Mon 9/21")
+        self.assertEqual(sum(1 for l in lines if "Long Run" in l), 1)
+
+    def test_days_with_nothing_are_omitted(self):
+        lines = bf.weekly_lines([self.ev(1, "A", [date(2026, 9, 23)])], self.MONDAY, plain=True)
+        self.assertNotIn("Mon 9/21", lines)
+        self.assertIn("Wed 9/23", lines)
+
+    def test_plain_mode_has_no_markup_or_per_event_urls(self):
+        """A week of URLs would overflow the message cap every single time."""
+        events = [self.ev(i, f"Event {i}", [self.MONDAY]) for i in range(5)]
+        text = "\n".join(bf.weekly_lines(events, self.MONDAY, plain=True))
+        self.assertNotIn("http", text)
+        self.assertNotIn("<", text)
+        self.assertNotIn("*", text)
+
+    def test_block_mode_keeps_per_event_links(self):
+        events = [self.ev(i, f"Event {i}", [self.MONDAY]) for i in range(5)]
+        text = "\n".join(bf.weekly_lines(events, self.MONDAY, plain=False))
+        self.assertIn(f"<{bf.SITE}/events/e0|Event 0>", text)
+
+    def test_a_full_real_week_fits_both_transports(self):
+        import slack_digest as sd
+
+        events = [
+            self.ev(i, f"Event number {i} with a realistically long title", [
+                self.MONDAY + timedelta(days=i % 7)
+            ])
+            for i in range(60)
+        ]
+        plain = bf.build_weekly(events, self.MONDAY, "https://x", "S", workflow_mode=True)
+        self.assertLessEqual(
+            len(plain["headline"]) + len(plain["text"]), sd.WORKFLOW_TEXT_LIMIT
+        )
+        blocks = bf.build_weekly(events, self.MONDAY, "https://x", "S", workflow_mode=False)
+        self.assertLessEqual(len(blocks["blocks"]), 50)
+        for block in blocks["blocks"]:
+            if block["type"] == "section":
+                self.assertLessEqual(len(block["text"]["text"]), 3000)
 
 
 class TestPackLines(unittest.TestCase):

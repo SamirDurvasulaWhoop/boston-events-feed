@@ -6,6 +6,7 @@ Two daily Slack digests of cheap and free things happening in Boston *today*:
 |---|---|---|---|
 | `boston_feed.py` | The Boston Calendar's monthly ["$10 or less"][example] column | everything the column lists | 9:07am |
 | `aiweek_feed.py` | [Boston AI Week schedule](https://aiweek.boston/schedule?free=true) | free **and** outside work hours | 9:37am |
+| `boston_feed.py --weekly` | same as above | the coming seven days | Mondays 9:12am |
 
 Both share `slack_digest.py` for delivery, so they render identically and
 support the same two webhook flavours.
@@ -64,7 +65,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 76 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 88 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -122,6 +123,24 @@ Known rough edges in the source data, all handled:
 - Some titles run past 150 characters and are truncated on a word boundary.
 - Some titles contain `|`, which would silently truncate a Block Kit link
   label, so it is replaced there.
+
+## The weekly digest
+
+`boston_feed.py --weekly` covers the seven days starting today, grouped under
+a heading per day, and goes out Monday mornings.
+
+Two things differ from the daily digest, both forced by volume — a week runs
+27–48 events where a day runs 0–26:
+
+- **Each event is listed once**, on the first day it runs inside the window,
+  tagged `through 9/27`. Listing a Friday–Sunday festival on all three days
+  and a weekly series on every occurrence turned a 29-event week into 39
+  lines of mostly repetition.
+- **No per-event links on the Workflow Builder path.** A week of Boston
+  Calendar URLs runs 4100–6200 characters against a 3900 cap, so every single
+  week would be truncated. Block Kit keeps its links, because it can spread
+  across sections. Measured worst case: 2590/3900 plain, 2855/3000 per
+  section.
 
 ## Setup
 
@@ -209,6 +228,7 @@ smoke test). After that it runs itself every morning.
 | `--date 2026-09-19` | Run as if it were that day — handy for testing a busy Saturday |
 | `--dry-run` | Print the payload and a rendered preview, post nothing |
 | `--post-when-empty` | Post a "nothing today" note instead of staying silent |
+| `--weekly` | Digest the seven days starting today, grouped by day |
 | `--expect-hour 8` | Exit unless the current Boston hour matches; for DST-safe local cron |
 | `--workflow-payload` | Force the flat Workflow Builder payload; useful with `--dry-run` |
 

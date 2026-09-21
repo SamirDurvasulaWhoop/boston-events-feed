@@ -295,6 +295,92 @@ def digest_lines(events: list[Event], today: date, plain: bool = False) -> list[
     return lines
 
 
+def week_days(start: date) -> list[date]:
+    return [start + timedelta(days=i) for i in range(7)]
+
+
+def weekly_headline(events: list[Event], start: date) -> str:
+    end = start + timedelta(days=6)
+    span = (
+        f"{start.strftime('%b %-d')}–{end.strftime('%-d')}"
+        if start.month == end.month
+        else f"{start.strftime('%b %-d')}–{end.strftime('%b %-d')}"
+    )
+    count = len(events)
+    return f"{count} cheap thing{'s' if count != 1 else ''} in Boston this week — {span}"
+
+
+def weekly_lines(events: list[Event], start: date, plain: bool) -> list[str]:
+    """Group the week's events under a heading per day.
+
+    Deliberately no per-event links on the plain path: a week runs 32-48
+    events, and adding Boston Calendar URLs takes the body to 4100-6200
+    characters against a 3900 cap, so every single week would be truncated.
+    Block Kit has multiple sections to spread across and keeps its links.
+    """
+    days = week_days(start)
+    # Each event appears once, on the first day it runs inside the window --
+    # otherwise a Fri-Sun festival is listed three times and a month-long
+    # weekly series shows up every day, which swamps the digest.
+    first_day: dict[int, date] = {}
+    for event in events:
+        within = [d for d in days if d in event.dates]
+        if within:
+            first_day[id(event)] = min(within)
+
+    lines: list[str] = []
+    for day in days:
+        todays = sorted(
+            (e for e in events if first_day.get(id(e)) == day),
+            key=lambda e: (bool(e.end_date and e.end_date > day), e.number),
+        )
+        if not todays:
+            continue
+        label = day.strftime("%a %-m/%-d")
+        lines.append(f"{label}" if plain else f"*{label}*")
+        for event in todays:
+            if plain:
+                line = f"   •  {event.title}"
+            else:
+                title = slack_escape(event.title)
+                url = absolute(event.url)
+                line = f"• <{url}|{title}>" if url else f"• *{title}*"
+            details = []
+            if event.where:
+                details.append(event.where if plain else slack_escape(event.where))
+            cost = normalize_cost(event.cost)
+            if cost:
+                details.append(cost if plain else slack_escape(cost))
+            # Since the event is listed only once, say how long it runs.
+            span = [d for d in event.dates if d in days]
+            if len(span) > 1:
+                details.append(
+                    f"through {max(span).strftime('%-m/%-d')}"
+                    if event.end_date
+                    else f"also {', '.join(d.strftime('%-m/%-d') for d in span[1:])}"
+                )
+            if details:
+                line += " — " + " · ".join(details)
+            lines.append(line)
+        lines.append("")
+    return lines[:-1] if lines and lines[-1] == "" else lines
+
+
+def build_weekly(
+    events: list[Event], start: date, source_url: str, source_title: str,
+    workflow_mode: bool,
+) -> dict:
+    headline = f"🗓️  {weekly_headline(events, start)}"
+    return slack.build_payload(
+        headline=headline,
+        lines=weekly_lines(events, start, plain=workflow_mode),
+        footer=f"From <{source_url}|{slack_escape(source_title)}>",
+        workflow_mode=workflow_mode,
+        plain_footer=f"Full list: {source_url}",
+        overflow_footer=f"+{{dropped}} more — full list: {source_url}",
+    )
+
+
 def build_message(events: list[Event], today: date, source_url: str, source_title: str) -> dict:
     """Block Kit payload, for a classic incoming webhook."""
     headline = digest_headline(events, today)
@@ -391,6 +477,11 @@ def main() -> int:
         help="force the flat Workflow Builder payload (auto-detected from the "
              "webhook URL otherwise); useful with --dry-run",
     )
+    parser.add_argument(
+        "--weekly", action="store_true",
+        help="digest the seven days starting today, grouped by day, instead "
+             "of just today",
+    )
     args = parser.parse_args()
 
     if args.expect_hour is not None:
@@ -423,6 +514,26 @@ def main() -> int:
     webhook = os.environ.get("SLACK_WEBHOOK_URL", "")
     workflow_mode = args.workflow_payload or is_workflow_webhook(webhook)
     log(f"payload mode: {'workflow-builder' if workflow_mode else 'block-kit'}")
+
+    if args.weekly:
+        span = week_days(today)
+        # An event running Fri-Sun counts once for the week, not three times.
+        week = [e for e in events if any(d in e.dates for d in span)]
+        log(f"{len(week)} events over {span[0]}..{span[-1]}")
+        if not week:
+            if args.quiet_when_empty:
+                log("nothing this week; staying quiet")
+                return 0
+            log("nothing this week")
+        payload = build_weekly(week, today, source_url, source_title, workflow_mode)
+        if args.dry_run:
+            print(slack.render_preview(payload))
+            return 0
+        if not webhook:
+            raise SystemExit("SLACK_WEBHOOK_URL is not set")
+        post_to_slack(webhook, payload)
+        log("posted")
+        return 0
 
     empty_text = (
         f"🎟️  Nothing on the cheap list for *{today.strftime('%a %-m/%-d')}* — "
