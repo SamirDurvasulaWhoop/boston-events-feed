@@ -231,9 +231,9 @@ class TestWorkflowPayload(unittest.TestCase):
 
     def test_workflow_trigger_shapes_are_detected(self):
         for url in (
-            "https://hooks.slack.com/triggers/E045/1208/510743dc",
-            "https://hooks.slack.com/workflows/T00/A00/123/abc",
-            "https://slack.com/shortcuts/Ft0C27GKF86T/13732ee7",
+            "https://hooks.slack.com/triggers/EXAMPLE/000/fake",
+            "https://hooks.slack.com/workflows/EXAMPLE/000/123/fake",
+            "https://slack.com/shortcuts/FtEXAMPLE/fake",
         ):
             with self.subTest(url):
                 self.assertTrue(bf.is_workflow_webhook(url))
