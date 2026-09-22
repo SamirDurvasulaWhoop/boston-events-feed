@@ -405,7 +405,15 @@ def build_message(events: list[Event], today: date, source_url: str, source_titl
             ],
         }
     )
-    return {"text": f"🎟️ {headline}", "blocks": blocks}
+    return {
+        "text": f"🎟️ {headline}",
+        "blocks": blocks,
+        # Titles carry the links, so no bare URLs appear -- and these two
+        # stop Slack previewing the hrefs anyway. No equivalent exists on the
+        # Workflow Builder path.
+        "unfurl_links": False,
+        "unfurl_media": False,
+    }
 
 
 

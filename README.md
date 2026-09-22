@@ -65,7 +65,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 95 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 97 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim

@@ -99,7 +99,17 @@ def build_block_payload(headline: str, lines: list[str], footer: str) -> dict:
     blocks.append(
         {"type": "context", "elements": [{"type": "mrkdwn", "text": footer}]}
     )
-    return {"text": headline, "blocks": blocks}
+    return {
+        "text": headline,
+        "blocks": blocks,
+        # Titles are the links here, so there are no bare URLs to preview --
+        # but a digest of 26 events would still invite 26 cards if Slack
+        # decided to unfurl the hrefs. These two flags settle it. There is no
+        # equivalent on the Workflow Builder path, which is the single
+        # strongest reason to move to a classic incoming webhook.
+        "unfurl_links": False,
+        "unfurl_media": False,
+    }
 
 
 def build_workflow_payload(

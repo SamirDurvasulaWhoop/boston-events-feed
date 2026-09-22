@@ -115,6 +115,24 @@ class TestSlackPayload(unittest.TestCase):
             for i in range(count)
         ]
 
+    def test_block_kit_suppresses_link_previews(self):
+        """The whole point of preferring a classic incoming webhook."""
+        payload = bf.build_message(
+            self.make(3), date(2026, 9, 12), "https://example.com", "Source"
+        )
+        self.assertIs(payload["unfurl_links"], False)
+        self.assertIs(payload["unfurl_media"], False)
+
+    def test_block_kit_puts_no_bare_urls_on_screen(self):
+        payload = bf.build_message(
+            self.make(3), date(2026, 9, 12), "https://example.com", "Source"
+        )
+        body = " ".join(
+            b["text"]["text"] for b in payload["blocks"] if b["type"] == "section"
+        )
+        # Every URL must sit inside <url|label>, never loose in the text.
+        self.assertNotRegex(body, r"(?<![<|])https?://")
+
     def test_busy_day_stays_within_slack_limits(self):
         payload = bf.build_message(
             self.make(40), date(2026, 9, 12), "https://example.com", "Source"
