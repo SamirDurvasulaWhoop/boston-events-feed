@@ -256,13 +256,26 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
 
 ## Notes and known edges
 
-- **Post time drifts with DST, and never schedule on the hour.** The target is
+- **Post time drifts with DST, and scheduling is best-effort.** The target is
   ~9am Boston. GitHub cron is UTC-only with no DST handling, so `7 13 * * *`
-  is 9:07am during EDT and 8:07am during EST — shift to `7 14 * * *` after the
-  November clock change. The odd minutes are deliberate: the first version used
-  `0 13 * * *` and GitHub silently skipped it entirely, producing no run at
-  all rather than a late one. GitHub sheds scheduled-workflow load at the top
-  of the hour, so `:00` and `:30` are the worst slots to pick.
+  is 9:07am during EDT and 8:07am during EST — shift all three crons an hour
+  later after the November clock change.
+
+  **The repo is public on purpose.** While it was a free-tier *private* repo,
+  scheduled runs fired 3–5.5 hours late every single day (13:07 UTC scheduled,
+  16:22 / 16:45 / 18:36 actual) — they were never dropped, just starved.
+  Free private repos get the lowest scheduling priority; public repos get far
+  better treatment. Nothing here is sensitive: the webhooks live in Actions
+  secrets, and no workflow triggers on `pull_request`, so a fork cannot reach
+  them.
+
+  Odd minutes (`:07`, `:12`, `:37`) are kept because the top of the hour is
+  the most contended slot, but note that was *not* the cause of the delays —
+  an earlier version of this note blamed `:00` and was wrong.
+- **A late or dropped run is silent.** There is no state and no retry, so a
+  skipped schedule just means no post — nothing errors and nothing emails you.
+  If a morning goes quiet, check the Actions tab before suspecting the
+  scrapers.
 - **A dropped run means a missed day, silently.** There is no state and no
   retry, so a skipped schedule just means no post — nothing errors and nothing
   emails you. If a morning goes quiet, check the Actions tab before suspecting
