@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.samir.boston-events</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>REPO_PATH/scripts/nudge.sh</string>
+  </array>
+
+  <!-- 9:00 local time. launchd follows the wall clock, so this stays at 9am
+       across the DST change with nothing to adjust. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <!-- If the Mac was asleep or off at 9:00, run as soon as it wakes. That
+       means a missed morning posts when you open the laptop, rather than not
+       at all. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>HOME_PATH/Library/Logs/boston-events-feed.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>HOME_PATH/Library/Logs/boston-events-feed.err.log</string>
+</dict>
+</plist>

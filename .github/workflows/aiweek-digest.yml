@@ -1,13 +1,11 @@
 name: Daily AI Week digest
 
 on:
-  schedule:
-    # 13:37 UTC = 9:37am Boston during EDT, 8:37am during EST. Half an hour
-    # after the Boston Calendar digest so the two do not land together, and
-    # off the top/half of the hour, which are GitHub's busiest cron slots.
-    # GitHub cron is UTC-only with no DST handling; shift to "37 14 * * *"
-    # after the November clock change.
-    - cron: "37 13 * * *"
+  # No `schedule:` trigger on purpose. GitHub's scheduler ran this 3-5.5
+  # hours late every day for a week (13:07 UTC scheduled; 16:22, 16:45, 17:36
+  # actual), and making the repo public did not help. Dispatches, by
+  # contrast, start within ~20 seconds, so timekeeping moved to a launchd
+  # agent on a Mac that calls `gh workflow run` -- see scripts/nudge.sh.
   workflow_dispatch:
     inputs:
       date:

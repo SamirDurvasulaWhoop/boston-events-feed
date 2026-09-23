@@ -1,13 +1,11 @@
 name: Daily Boston events digest
 
 on:
-  schedule:
-    # 13:07 UTC = 9:07am Boston during EDT, 8:07am during EST.
-    # Deliberately off the top of the hour: GitHub sheds scheduled-run load at
-    # :00 by dropping runs outright, and a 13:00 entry was silently skipped.
-    # GitHub cron is UTC-only with no DST handling, so flip this to
-    # "7 14 * * *" after the November clock change to stay near 9am.
-    - cron: "7 13 * * *"
+  # No `schedule:` trigger on purpose. GitHub's scheduler ran this 3-5.5
+  # hours late every day for a week (13:07 UTC scheduled; 16:22, 16:45, 17:36
+  # actual), and making the repo public did not help. Dispatches, by
+  # contrast, start within ~20 seconds, so timekeeping moved to a launchd
+  # agent on a Mac that calls `gh workflow run` -- see scripts/nudge.sh.
   workflow_dispatch:
     inputs:
       date:

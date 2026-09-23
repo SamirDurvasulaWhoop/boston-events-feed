@@ -4,9 +4,9 @@ Two daily Slack digests of cheap and free things happening in Boston *today*:
 
 | Feed | Source | Filter | Posts |
 |---|---|---|---|
-| `boston_feed.py` | The Boston Calendar's monthly ["$10 or less"][example] column | everything the column lists | 9:07am |
-| `aiweek_feed.py` | [Boston AI Week schedule](https://aiweek.boston/schedule?free=true) | free **and** outside work hours | 9:37am |
-| `boston_feed.py --weekly` | same as above | the coming seven days | Mondays 9:12am |
+| `boston_feed.py` | The Boston Calendar's monthly ["$10 or less"][example] column | everything the column lists | 9:00am |
+| `aiweek_feed.py` | [Boston AI Week schedule](https://aiweek.boston/schedule?free=true) | free **and** outside work hours | 9:00am |
+| `boston_feed.py --weekly` | same as above | the coming seven days | Mondays 9:00am |
 
 Both share `slack_digest.py` for delivery, so they render identically and
 support the same two webhook flavours.
@@ -161,6 +161,38 @@ Two things differ from the daily digest, both forced by volume — a week runs
   across sections. Measured worst case: 2590/3900 plain, 2855/3000 per
   section.
 
+## Scheduling (launchd)
+
+`scripts/nudge.sh` calls `gh workflow run` for each digest; GitHub then
+executes within seconds using its own secrets. The Slack webhooks stay in
+Actions secrets rather than on the laptop, and the CI test gate still runs
+before every post — the Mac only supplies the clock.
+
+```bash
+chmod +x scripts/nudge.sh
+sed -e "s|REPO_PATH|$PWD|g" -e "s|HOME_PATH|$HOME|g" \
+    scripts/com.samir.boston-events.plist > ~/Library/LaunchAgents/com.samir.boston-events.plist
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.samir.boston-events.plist
+```
+
+Runs at 9:00 **local** time, so it follows DST with nothing to adjust in
+November. The weekly digest is gated to Mondays inside the script. If the Mac
+is asleep at 9:00, launchd runs the job on wake, so a missed morning posts
+when you open the laptop instead of not at all; if the Mac is off all day
+there is no post.
+
+Check on it:
+
+```bash
+tail ~/Library/Logs/boston-events-feed.log     # one line per dispatch
+launchctl print gui/$UID/com.samir.boston-events | grep -E 'state|runs'
+launchctl kickstart -k gui/$UID/com.samir.boston-events   # fire it now
+```
+
+`gh` is invoked by absolute path because launchd provides a minimal `PATH`.
+Its credential lives in the login keychain and does resolve from a launchd
+agent — verified, since that was the one real risk in this approach.
+
 ## Setup
 
 ### 1. Slack webhook
@@ -256,22 +288,14 @@ to pin the job to a specific post URL if monthly discovery ever breaks.
 
 ## Notes and known edges
 
-- **Post time drifts with DST, and scheduling is best-effort.** The target is
-  ~9am Boston. GitHub cron is UTC-only with no DST handling, so `7 13 * * *`
-  is 9:07am during EDT and 8:07am during EST — shift all three crons an hour
-  later after the November clock change.
-
-  **The repo is public on purpose.** While it was a free-tier *private* repo,
-  scheduled runs fired 3–5.5 hours late every single day (13:07 UTC scheduled,
-  16:22 / 16:45 / 18:36 actual) — they were never dropped, just starved.
-  Free private repos get the lowest scheduling priority; public repos get far
-  better treatment. Nothing here is sensitive: the webhooks live in Actions
-  secrets, and no workflow triggers on `pull_request`, so a fork cannot reach
-  them.
-
-  Odd minutes (`:07`, `:12`, `:37`) are kept because the top of the hour is
-  the most contended slot, but note that was *not* the cause of the delays —
-  an earlier version of this note blamed `:00` and was wrong.
+- **GitHub's scheduler is not used, deliberately.** Its `schedule` trigger ran
+  these 3–5.5 hours late *every day for a week* — 13:07 UTC scheduled against
+  16:22, 16:45, 17:36 actual — and the runs were never dropped, just starved.
+  Moving off the top of the hour did not help. Making the repo public did not
+  help. `workflow_dispatch`, meanwhile, has started within ~20 seconds every
+  single time. So the workflows carry no `schedule:` block and a launchd agent
+  does the timekeeping (see below). The repo stays public since that costs
+  nothing and the diagnosis is worth leaving visible.
 - **A late or dropped run is silent.** There is no state and no retry, so a
   skipped schedule just means no post — nothing errors and nothing emails you.
   If a morning goes quiet, check the Actions tab before suspecting the
