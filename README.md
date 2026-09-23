@@ -65,7 +65,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 101 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 97 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -104,16 +104,6 @@ The `--ics` flag parses a calendar file anyway, for pointing this at other
 calendars. On that path every event reads as free, because the format cannot
 say otherwise — sound only if the export was already filtered, and the run
 logs a warning saying so.
-
-**It posts no per-event URLs on the Workflow Builder path.** aiweek.boston
-serves rich Open Graph metadata, so Slack turned every bare URL into a
-full-size preview card — ten events, ten cards. There is no `unfurl_links`
-flag reachable through a Workflow Builder webhook and no text form that is
-both clickable and un-previewed, so the only lever is not emitting the URLs.
-Each line still carries time and venue, and one footer link remains, so a
-post now renders one card instead of ten. `--event-links` restores them.
-Block Kit is unaffected: its titles carry the links and it sets
-`unfurl_links: false`.
 
 It posts through its **own** Slack workflow, named `Boston AI Week Events`, so
 the posts are attributed separately and the whole thing can be retired after

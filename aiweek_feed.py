@@ -283,17 +283,7 @@ def short_location(event: Event) -> str:
     return loc.strip(" -–—([{&/|").strip()
 
 
-def digest_lines(events: list[Event], plain: bool, event_links: bool = False) -> list[str]:
-    """One line per event.
-
-    `event_links` is off by default on the plain path, and that is the whole
-    point. Workflow Builder renders variables literally, so a bare URL is the
-    only clickable form available -- and aiweek.boston serves rich Open Graph
-    data, so Slack turns every one into a full-size preview card. Ten events
-    meant ten cards. There is no unfurl flag on this path to suppress them, so
-    the only lever is not emitting the URLs. Block Kit is unaffected: its
-    titles carry the links and it sets unfurl_links false.
-    """
+def digest_lines(events: list[Event], plain: bool) -> list[str]:
     lines = []
     for index, event in enumerate(events):
         mark = slack.marker(index)
@@ -315,15 +305,13 @@ def digest_lines(events: list[Event], plain: bool, event_links: bool = False) ->
             details.append("at capacity")
         line = f"{head} — {' · '.join(details)}"
 
-        if plain and event_links and event.url:
+        if plain and event.url:
             line += f"\n     {event.url}"
         lines.append(line)
     return lines
 
 
-def build(
-    events: list[Event], today: date, workflow_mode: bool, event_links: bool = False
-) -> dict:
+def build(events: list[Event], today: date, workflow_mode: bool) -> dict:
     count = len(events)
     headline = (
         f"🤖  {count} free after-hours AI Week event"
@@ -333,7 +321,7 @@ def build(
     hint = slack.react_hint(count)
     return slack.build_payload(
         headline=headline,
-        lines=digest_lines(events, plain=workflow_mode, event_links=event_links),
+        lines=digest_lines(events, plain=workflow_mode),
         footer=f"{hint}  ·  From <{footer_url}|the free Boston AI Week schedule>",
         workflow_mode=workflow_mode,
         plain_footer=f"{hint}\nFull schedule: {footer_url}",
@@ -374,13 +362,6 @@ def main() -> int:
     parser.add_argument(
         "--workflow-payload", action="store_true",
         help="force the flat Workflow Builder payload (auto-detected otherwise)",
-    )
-    parser.add_argument(
-        "--event-links", action="store_true",
-        help="include each event's URL on the plain path. Off by default: "
-             "aiweek.boston has rich Open Graph data, so Slack renders a "
-             "full-size preview card per link and there is no way to "
-             "suppress them through a Workflow Builder webhook",
     )
     args = parser.parse_args()
 
@@ -435,7 +416,7 @@ def main() -> int:
             )
         )
     else:
-        payload = build(selected, today, workflow_mode, event_links=args.event_links)
+        payload = build(selected, today, workflow_mode)
 
     if args.dry_run:
         print(slack.render_preview(payload))
