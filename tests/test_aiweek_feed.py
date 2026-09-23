@@ -247,7 +247,32 @@ class TestDigest(unittest.TestCase):
         line = aw.digest_lines([make(title="A & B")], plain=True)[0]
         self.assertNotIn("&amp;", line)
         self.assertNotIn("<http", line)
+
+    def test_plain_mode_omits_event_urls_by_default(self):
+        """Every bare URL becomes a full-size Slack preview card here, and
+        there is no unfurl flag on the Workflow Builder path."""
+        line = aw.digest_lines([make()], plain=True)[0]
+        self.assertNotIn("http", line)
+
+    def test_event_links_flag_restores_them(self):
+        line = aw.digest_lines([make()], plain=True, event_links=True)[0]
         self.assertIn("https://aiweek.boston/schedule/x", line)
+
+    def test_block_kit_always_keeps_links_and_kills_previews(self):
+        payload = aw.build([make()], date(2026, 9, 29), workflow_mode=False)
+        body = " ".join(
+            b["text"]["text"] for b in payload["blocks"] if b["type"] == "section"
+        )
+        self.assertIn("|", body, "title should carry the link")
+        self.assertIs(payload["unfurl_links"], False)
+
+    def test_only_one_link_remains_in_a_plain_digest(self):
+        """The footer. That is one preview card per post instead of ten."""
+        payload = aw.build(
+            [make(title=f"E{i}") for i in range(10)],
+            date(2026, 9, 29), workflow_mode=True,
+        )
+        self.assertEqual(payload["text"].count("http"), 1)
 
     def test_virtual_is_labelled(self):
         line = aw.digest_lines([make(location="Virtual")], plain=True)[0]
