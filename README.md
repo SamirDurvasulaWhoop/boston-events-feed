@@ -193,6 +193,15 @@ is asleep at 9:00, launchd runs the job on wake, so a missed morning posts
 when you open the laptop instead of not at all; if the Mac is off all day
 there is no post.
 
+**Failure alerts.** On the last run of the morning (noon) the script audits
+what actually happened and raises a macOS notification if anything is wrong.
+It checks run *outcomes*, not just dispatches, because those differ: a digest
+can dispatch cleanly and then fail in CI — which is exactly what happened on
+2026-09-28 when the source site answered 403 — and a marker alone would never
+catch that. Nothing is posted to Slack; a failure should be quiet to everyone
+but you. Verified that `osascript` notifications do fire from a launchd agent,
+which was the one uncertainty.
+
 Check on it:
 
 ```bash
