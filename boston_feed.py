@@ -17,6 +17,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -39,18 +40,55 @@ WEEKDAYS = {
 }
 
 
-def fetch(url: str, timeout: int = 30) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+# Statuses worth trying again: rate limiting, WAF blips and server errors.
+# A real 404 is not retried -- that means the page genuinely is not there.
+RETRY_STATUSES = {403, 408, 425, 429, 500, 502, 503, 504}
+FETCH_ATTEMPTS = 3
+SCAN_POLITENESS_SECONDS = 0.4
+
+
+def fetch(url: str, timeout: int = 30, attempts: int = FETCH_ATTEMPTS) -> str:
+    """GET with backoff.
+
+    The Boston Calendar intermittently answers 403. Without a retry, one blip
+    used to send discovery into its 100-request slug scan, which then looked
+    like abuse and got everything 403'd -- so a momentary hiccup failed the
+    whole morning.
+    """
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            last = exc
+            if exc.code not in RETRY_STATUSES:
+                raise
+        except (urllib.error.URLError, OSError) as exc:
+            last = exc
+        if attempt < attempts:
+            delay = 5 * (2 ** (attempt - 1))
+            log(f"note: {url.rsplit('/', 1)[-1] or url} -> {last}; retrying in {delay}s")
+            time.sleep(delay)
+    raise last
+
+
+class Blocked(Exception):
+    """The site is refusing us, as opposed to the page not existing."""
 
 
 def url_ok(url: str) -> bool:
+    """True if the page exists. Raises Blocked when the site refuses us."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=15) as resp:
             return resp.status == 200
-    except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+    except urllib.error.HTTPError as exc:
+        if exc.code in RETRY_STATUSES:
+            raise Blocked(f"HTTP {exc.code}") from exc
+        return False
+    except (urllib.error.URLError, OSError):
         return False
 
 
@@ -83,11 +121,27 @@ def find_monthly_post(today: date) -> tuple[str, str]:
     except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
         log(f"note: sitemap fetch failed ({exc}), falling back to slug scan")
 
-    # The count has run 100-108 recently; scan a generous window around that.
-    for count in range(60, 161):
+    # The count has run 100-108 recently, so try the plausible middle first and
+    # widen outwards -- most months are found in a handful of requests rather
+    # than a hundred. Paced, because hammering the site is what turned a single
+    # transient 403 into a completely failed morning.
+    candidates = sorted(range(60, 161), key=lambda n: abs(n - 104))
+    for index, count in enumerate(candidates):
         url = f"{SITE}/events/{count}-things-to-do-in-boston-for-10-or-less-{month}-{year}"
-        if url_ok(url):
-            return url, slug_title(url)
+        try:
+            if url_ok(url):
+                log(f"note: slug scan found it after {index + 1} probes")
+                return url, slug_title(url)
+        except Blocked as exc:
+            # Keep going a little in case it was one bad response, but give up
+            # well before we look like a scraper being hostile.
+            if index >= 4:
+                raise SystemExit(
+                    f"the Boston Calendar is refusing requests ({exc}). This is a "
+                    "block or rate limit, not a missing post -- try again later, "
+                    "or set SOURCE_URL to skip discovery."
+                ) from exc
+        time.sleep(SCAN_POLITENESS_SECONDS)
 
     raise SystemExit(
         f"could not find the '$10 or less' post for {month} {year}. "

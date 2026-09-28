@@ -11,17 +11,25 @@
     <string>REPO_PATH/scripts/nudge.sh</string>
   </array>
 
-  <!-- 9:00 local time. launchd follows the wall clock, so this stays at 9am
-       across the DST change with nothing to adjust. -->
+  <!-- 9:00 local time, then every half hour to noon. The script records a
+       per-day marker for each digest it sends, so the later runs are no-ops
+       once the morning has gone out. They exist because the 9:00 firing
+       usually lands while the Mac is still joining a network: four of the
+       first five mornings lost a digest to DNS failures, timeouts and
+       connection resets. Local time means this follows DST by itself. -->
   <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key><integer>9</integer>
-    <key>Minute</key><integer>0</integer>
-  </dict>
+  <array>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>10</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
 
-  <!-- If the Mac was asleep or off at 9:00, run as soon as it wakes. That
-       means a missed morning posts when you open the laptop, rather than not
-       at all. -->
+  <!-- If the Mac was asleep or off, launchd runs the job on wake, so a missed
+       morning posts when the laptop is opened rather than not at all. -->
   <key>RunAtLoad</key>
   <false/>
 

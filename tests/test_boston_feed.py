@@ -521,3 +521,80 @@ class TestPackLines(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestTransientFailureHandling(unittest.TestCase):
+    """A single 403 used to fail the whole morning: it skipped retry, fell
+    into a 100-request slug scan, and that scan then looked like abuse."""
+
+    def setUp(self):
+        self.calls = []
+        self.real_urlopen = bf.urllib.request.urlopen
+        self.real_sleep = bf.time.sleep
+        bf.time.sleep = lambda s: None
+
+    def tearDown(self):
+        bf.urllib.request.urlopen = self.real_urlopen
+        bf.time.sleep = self.real_sleep
+
+    def fake(self, responses):
+        """responses: list of either an HTTP status int, or body text."""
+        import io
+
+        def _open(req, timeout=None):
+            self.calls.append(req.full_url)
+            item = responses[min(len(self.calls) - 1, len(responses) - 1)]
+            if isinstance(item, int):
+                raise bf.urllib.error.HTTPError(
+                    req.full_url, item, f"HTTP {item}", {}, None
+                )
+            resp = io.BytesIO(item.encode())
+            resp.status = 200
+            resp.__enter__ = lambda s=resp: s
+            resp.__exit__ = lambda s, *a: None
+            return resp
+
+        bf.urllib.request.urlopen = _open
+
+    def test_fetch_retries_a_transient_403_then_succeeds(self):
+        self.fake([403, 403, "recovered"])
+        self.assertEqual(bf.fetch("https://example.com/x"), "recovered")
+        self.assertEqual(len(self.calls), 3)
+
+    def test_fetch_gives_up_after_the_attempt_limit(self):
+        self.fake([403])
+        with self.assertRaises(bf.urllib.error.HTTPError):
+            bf.fetch("https://example.com/x")
+        self.assertEqual(len(self.calls), bf.FETCH_ATTEMPTS)
+
+    def test_fetch_does_not_retry_a_404(self):
+        """A missing page is an answer, not a blip."""
+        self.fake([404])
+        with self.assertRaises(bf.urllib.error.HTTPError):
+            bf.fetch("https://example.com/x")
+        self.assertEqual(len(self.calls), 1, "404 must not be retried")
+
+    def test_url_ok_distinguishes_missing_from_blocked(self):
+        self.fake([404])
+        self.assertFalse(bf.url_ok("https://example.com/x"))
+        self.calls.clear()
+        self.fake([403])
+        with self.assertRaises(bf.Blocked):
+            bf.url_ok("https://example.com/x")
+
+    def test_a_blocked_site_reports_blocking_not_a_missing_post(self):
+        """The old code said 'may not have published it yet', which sent you
+        looking at the wrong thing entirely."""
+        self.fake([403])
+        with self.assertRaises(SystemExit) as caught:
+            bf.find_monthly_post(date(2026, 9, 28))
+        self.assertIn("refusing requests", str(caught.exception))
+        self.assertNotIn("published it yet", str(caught.exception))
+
+    def test_a_blocked_scan_stops_early_instead_of_hammering(self):
+        self.fake([403])
+        with self.assertRaises(SystemExit):
+            bf.find_monthly_post(date(2026, 9, 28))
+        self.assertLess(
+            len(self.calls), 15, f"gave up after {len(self.calls)} requests, not ~100"
+        )

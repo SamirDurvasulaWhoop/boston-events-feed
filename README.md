@@ -36,8 +36,12 @@ the plainer path.
 
 1. **Finds the month's post.** The slug's leading count changes every month
    (June 108, July 100, August 106, September 102), so the URL is discovered
-   from `sitemap.xml` rather than guessed. If the sitemap lookup fails, it
-   brute-forces the count over 60–160.
+   from `sitemap.xml` rather than guessed. Fetches retry with backoff on 403,
+   429 and 5xx — the site answers 403 intermittently, and without a retry a
+   single blip used to fail the whole morning. If the sitemap still fails, a
+   slug scan tries the plausible counts first (nearest 104, widening out) and
+   paces itself; repeated refusals abort it with "the site is refusing
+   requests" rather than the misleading "may not have published it yet".
 2. **Parses the post body.** The column uses a rigid
    `N) Title / When / Where / Cost / Info` structure, so every entry is
    extracted with plain string parsing — no LLM, no API key, no dependencies
@@ -65,7 +69,7 @@ parsed, zero unrecognized dates, zero dates leaking outside their month.
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 97 tests, no dependencies
+python3 -m unittest discover -s tests -v   # 103 tests, no dependencies
 ```
 
 The parser test runs against `tests/fixture_september_excerpt.html`, a verbatim
@@ -162,6 +166,14 @@ Two things differ from the daily digest, both forced by volume — a week runs
   section.
 
 ## Scheduling (launchd)
+
+The agent fires at 9:00 and then every half hour to noon. Each digest it
+sends records a per-day marker, so the later runs are no-ops once the morning
+has gone out. That is not belt-and-braces: at 9:00 the Mac is usually waking
+and joining a network, and four of the first five mornings lost a digest to
+DNS failures, timeouts and connection resets with no retry and no alert. The
+script also waits up to five minutes for connectivity before giving up, and
+retries each dispatch four times.
 
 `scripts/nudge.sh` calls `gh workflow run` for each digest; GitHub then
 executes within seconds using its own secrets. The Slack webhooks stay in
